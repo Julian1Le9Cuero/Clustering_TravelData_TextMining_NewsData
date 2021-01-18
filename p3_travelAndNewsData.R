@@ -2,9 +2,10 @@
 # Loading libraries
 library(ggplot2) # Make nice plots
 library(factoextra) # Make plots for clusters
-library(gridExtra) # Stack several plots into 1
+library(gridExtra) # Stack several plots
 library(knitr) # Create html table
 library(dplyr) # Data manipulation
+library(tidyr) # Tidy Data
 
 # Loading data
 reviews_data <- read.csv('https://archive.ics.uci.edu/ml/machine-learning-databases/00484/tripadvisor_review.csv')
@@ -89,6 +90,36 @@ kable(btw_df)
 # for this problem and there aren't that many travel categories (just 10).
 kable(data.frame(k=3:10, wcss_decrease=round(abs(diff(withins_sum)), 2)))
 
+# Checking cluster means for scaled data
+km4_centers <- as.data.frame(round(km4$centers, 3))
+km4_centers <- km4_centers %>% gather(Activity, Value)
+km4_centers$Cluster <- rep(paste0("Cluster", " ", 1:4), 10)
+km4_centers <- arrange(km4_centers, Activity)
+
+# Interpreting clusters
+# Cluster 1: People in this cluster seem to like visiting dance
+# clubs as well as restaurants and it's somewhat probable that they are not very religious.
+# Cluster 2: It looks like the users in this group are very religious
+# ones and they also have preference for cultural activities like going to
+# art galleries.
+# Cluster 3: This group also likes to go outside, specifically,
+# they tend to enjoy going to theaters and beaches, but don't seem get
+# along with juice bars or art galleries.
+# Cluster 4: This cluster really seems to enjoy juice bars, resorts and
+# parks, just like cluster 2, they do not have big preference for
+# activicties related to religion.
+
+ggplot(km4_centers, aes(Activity, Value, group=Cluster, fill=Cluster)) +
+    geom_bar(stat="identity", position = position_dodge()) +
+    theme(axis.text.x = element_text(hjust = 1, angle = 60)) +
+    labs(y = "Scaled Mean Rating", fill="") +
+    ggtitle("Cluster means")
+
+# REFERENCE
+# Renjith, Shini, A. Sreekumar, and M. Jathavedan. 2018. 
+# Evaluation of Partitioning Clustering Algorithms for Processing 
+# Social Media Data in Tourism Domain. In 2018 IEEE Recent Advances in Intelligent Computational Systems (RAICS), 12731. IEEE.
+
 ## Hierarchical clustering
 # Get euclidean distance matrix
 distances <- dist(reviews_data, method = "euclidean")
@@ -103,69 +134,47 @@ plot(reviews.hclust)
 # Cut dendrogram/tree to obtain 4 clusters
 reviews.hclusters <- cutree(reviews.hclust, k=4)
 
+# Split data by cluster
 spl <- split(as.data.frame(reviews_data), reviews.hclusters)
 
-# Compare cluster assignments (Kmeans vs Hclust)
 hclustDf <- as.data.frame(round(sapply(spl, colMeans), 3))
 names(hclustDf) <- c("Cluster1", "Cluster2", "Cluster3", "Cluster4")
 hclustDf$Activity <- rownames(hclustDf)
+
 # Delete row names
 rownames(hclustDf) <- NULL
+
 # Reorder columns
 hclustDf <- hclustDf[,c(5, 1:4)]
-
-# Checking cluster means for scaled data
-km4_centers <- as.data.frame(round(km4$centers, 3))
-km4_centers <- km4_centers %>% gather(Activity, Value)
-km4_centers$Cluster <- rep(1:4, 10)
-km4_centers <- reshape(km4_centers, idvar = "Activity", timevar = "Cluster", direction = "wide")
-km4_centers <- rename(km4_centers, Cluster1 = Value.1, Cluster2 = Value.2, Cluster3 =  Value.3, Cluster4 = Value.4)
-
-# Make dataframe for comparison plot
-comp <- rbind(hclustDf, km4_centers)
-comp$method <- rep(c("hclust", "kmeans"), each=10)
+hclustDf <- gather(hclustDf, Cluster, Value, -Activity) %>% arrange(Activity)
 
 # Interpreting clusters
-# Cluster 1: People in this cluster seem to like visiting dance
-# clubs and it's somewhat probable that they are not very religious.
-ggplot(comp, aes(Activity, Cluster1, group=method, fill=method)) +
+# Cluster 1: This cluster really seems to enjoy juice bars, dance clubs and
+# parks, they like to party, but for some reason don't like beaches.
+# Cluster 2: This group also likes to go outside, specifically,
+# they tend to enjoy going to art galleries and beaches, but don't seem get
+# along with dance clubs or museums (which might be contradictory because of their preference
+# for art).
+# Cluster 3: It looks like the users in this group are very religious
+# and they also have little preference for other activities that are
+# not related to religion.
+# Cluster 4: People in this cluster seem to like visiting restaurants, resorts
+# and also museums.
+
+ggplot(hclustDf, aes(Activity, Value, group=Cluster, fill=Cluster)) +
     geom_bar(stat="identity", position = position_dodge()) +
     theme(axis.text.x = element_text(hjust = 1, angle = 60)) +
-    scale_fill_manual(values = c("#E69F00", "#56B4E9")) +
-    labs(y = "Scaled Mean Rating", fill="Method") +
-    ggtitle("Cluster 1")
+    labs(y = "Scaled Mean Rating", fill="") +
+    ggtitle("Cluster means")
 
-# Cluster 2: It looks like the users in this group are very religious
-# ones and they also have preference for cultural activities like going to
-# art galleries.
-ggplot(comp, aes(Activity, Cluster2, group=method, fill=method)) +
-    geom_bar(stat="identity", position = position_dodge()) +
-    theme(axis.text.x = element_text(hjust = 1, angle = 60)) +
-    scale_fill_manual(values = c("#E69F00", "#56B4E9")) +
-    labs(y = "Scaled Mean Rating", fill="Method") +
-    ggtitle("Cluster 2")
+# Conclusion
+# This data exploration showed that the output from both k-means and hierarchical
+# clustering or other clustering methods don't necessarily have to agree with
+# each other. However the methods used here clearly distinguished the group
+# that was more devoted to religion and managed to make each group different
+# to each other.
 
-# Cluster 3: This group also likes to go outside, specifically,
-# they tend to enjoy going to theaters and restaurants, but don't seem get
-# along with juice bars.
-ggplot(comp, aes(Activity, Cluster3, group=method, fill=method)) +
-    geom_bar(stat="identity", position = position_dodge()) +
-    theme(axis.text.x = element_text(hjust = 1, angle = 60)) +
-    scale_fill_manual(values = c("#E69F00", "#56B4E9")) +
-    labs(y = "Scaled Mean Rating", fill="Method") +
-    ggtitle("Cluster 3")
-
-# Cluster 4: This was the most heterogeneous cluster, there was
-# no coincidence between both methods. They give the impression
-# to incline to beaches and art galleries.
-ggplot(comp, aes(Activity, Cluster4, group=method, fill=method)) +
-    geom_bar(stat="identity", position = position_dodge()) +
-    theme(axis.text.x = element_text(hjust = 1, angle = 60)) +
-    scale_fill_manual(values = c("#E69F00", "#56B4E9")) +
-    labs(y = "Scaled Mean Rating", fill="Method") +
-    ggtitle("Cluster 4")
-
-## Text mining: Online News Feeds
+## Text mining - Online News Feeds
 # Loading packages
 library(tm) # Text mining
 library(SnowballC) # Word Stemming
@@ -175,7 +184,6 @@ library(tidyverse) # Data manipulation, plotting, etc.
 library(glmnet) # Lasso regression
 library(ipred) # Bagging for regression trees
 library(adabag) # Boosting for classification trees
-library(ROCR)
 
 # Variables description:
 # IDLink (numeric): Unique identifier of news items
@@ -197,7 +205,7 @@ news_data <- news_data[, -1]
 # Set system to english for current session
 Sys.setlocale("LC_ALL", "C")
 
-# Take smaller subset of data in order to compute dtm for headlines
+# Take smaller subset/sample from original data file
 set.seed(441110560)
 index <- sample(nrow(news_data), nrow(news_data)*0.25, replace = FALSE)
 news_data <- news_data[index,]
@@ -219,11 +227,14 @@ news_data$WeekDay <- as.factor(news_data$WeekDay)
 news_data <- subset(news_data, year(PublishDate) %in% 2015:2016)
 
 # Plot average sentiment title by day of the week
+# There seems to be no influence in the day of the week on the news sentiment
 news_data %>% ggplot(aes(x = SentimentTitle, group = WeekDay, fill = WeekDay)) +
     geom_density(position = "stack", alpha = 0.4)
 
-# Helper function to create and perform basic cleaning
-# for corpus
+news_data %>% ggplot(aes(x = SentimentHeadline, group = WeekDay, fill = WeekDay)) +
+    geom_density(position = "stack", alpha = 0.4)
+
+# Helper function makeCorpus to create and perform basic cleaning for corpus
 makeCorpus <- function(var){
     # Convert var to corpus
     corpus <- VCorpus(VectorSource(var))
@@ -252,35 +263,33 @@ inspect(frequencies[10:14, 2000:2003])
 # Take a look at the most frequent words (that appear at least 500 times)
 findFreqTerms(frequencies, lowfreq = 500)
 
-# Not surprisingly, the words hat appear more often are related
-# to the news topics
+# Not surprisingly, the words that appear more often are related to the news topics
 table(news_data$Topic)
 
 # Get rid of sparse terms that don't appear very often
-# Keep terms that are present by at least 1% or more
-# in the news titles
+# Keep terms that are present by at least 1% or more in the news titles
 sparse.title <- removeSparseTerms(frequencies, 0.99)
 sparse.title
 
 # Convert to data frame (df)
 sparseTitles <- as.data.frame(as.matrix(sparse.title))
 
-# Change names to convey R standars
+# Change names to convey R standards
 names(sparseTitles) <- make.names(names(sparseTitles))
 
 # Add dependent variable and other predictors
 sparseTitles <- sparseTitles %>%
     mutate(SentimentTitle = news_data$SentimentTitle)
 
-# Since this process will be repeated for the Headline column
-# I'll create two more helper functions
+# Since this process will be repeated for the Headline column, two more helper functions
+# are created
 
-# Create document term matrix (dtm)
+# getDtm: Create document term matrix (dtm)
 getDtm <- function(corpus, sparseness=.99){
     removeSparseTerms(DocumentTermMatrix(corpus), sparseness)
 }
 
-# Convert to dtm to df
+# asDf: Convert from dtm to df
 asDf <- function(dtm, outcome){
     df <- as.data.frame(as.matrix(dtm))
     # Friendly names
@@ -334,6 +343,7 @@ preds.title <- predict(lasso_fit,
                        as.matrix(testTitles[, -c(which(colnames(testTitles) == 'SentimentTitle'))]),
                        s = cv_lasso.title$lambda.min)
 
+# Another helper function to calculate RMSE
 RMSE <- function(pred, label){
     sqrt(mean((pred - label)^2))
 }
@@ -432,7 +442,9 @@ confusionMatrix(factor(pred.boost.topic$class), final_data.train$Topic)$overall[
 pred.boost.topic <- predict(boost.topic, final_data.test)
 confusionMatrix(factor(pred.boost.topic$class), final_data.test$Topic)$overall["Accuracy"]
 
-# In general, there a relatively high accuracy. Boosting significantly outperformed KNN
+# Summary
+# In general, there is a relatively high accuracy. Boosting significantly outperformed KNN
+# because it takes the average vote of many trees.
 
 # Future Work
 # Try other classification models like randomForest, CART, etc., as they might
@@ -440,6 +452,8 @@ confusionMatrix(factor(pred.boost.topic$class), final_data.test$Topic)$overall["
 # Tune parameters for both KNN and boosting and futures models. It seems that
 # setting an arbitrary number of neighbors affected the KNN performance on
 # new data (overfitting).
+# Find a way to plot the ROC Curve and get the AUC for a multiclass classification
+# problem like this one.
 
 # REFERENCE
 # Nuno Moniz and Luís Torgo (2018), "Multi-Source Social Feedback of Online News Feeds",
