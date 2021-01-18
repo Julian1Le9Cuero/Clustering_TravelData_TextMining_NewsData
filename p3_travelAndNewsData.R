@@ -1,5 +1,3 @@
-setwd("C:/Users/julia/OneDrive/Escritorio/DS/Rpubs/Clustering")
-
 # Clustering - Travel reviews
 # Loading libraries
 library(ggplot2) # Make nice plots
@@ -175,7 +173,9 @@ library(caret) # Split data into train and test sets
 library(lubridate) # Handle dates
 library(tidyverse) # Data manipulation, plotting, etc.
 library(glmnet) # Lasso regression
-library(ipred) # Bagging for regression tree
+library(ipred) # Bagging for regression trees
+library(adabag) # Boosting for classification trees
+library(ROCR)
 
 # Variables description:
 # IDLink (numeric): Unique identifier of news items
@@ -197,6 +197,11 @@ news_data <- news_data[, -1]
 # Set system to english for current session
 Sys.setlocale("LC_ALL", "C")
 
+# Take smaller subset of data in order to compute dtm for headlines
+set.seed(441110560)
+index <- sample(nrow(news_data), nrow(news_data)*0.25, replace = FALSE)
+news_data <- news_data[index,]
+
 # Convert Topic to factor
 # Don't perform the same for Headline and Title since they are
 # required to be characters for later
@@ -212,11 +217,6 @@ news_data$WeekDay <- as.factor(news_data$WeekDay)
 
 # Get year from 2015 and 2016
 news_data <- subset(news_data, year(PublishDate) %in% 2015:2016)
-
-# Take smaller subset of data in order to compute dtm for headlines
-set.seed(441110560)
-index <- sample(nrow(news_data), nrow(news_data)*0.6, replace = FALSE)
-news_data <- news_data[index,]
 
 # Plot average sentiment title by day of the week
 news_data %>% ggplot(aes(x = SentimentTitle, group = WeekDay, fill = WeekDay)) +
@@ -249,8 +249,8 @@ frequencies
 # Inspect matrix
 inspect(frequencies[10:14, 2000:2003])
 
-# Take a look at the most frequent words (that appear at least 2500 times)
-findFreqTerms(frequencies, lowfreq = 2500)
+# Take a look at the most frequent words (that appear at least 500 times)
+findFreqTerms(frequencies, lowfreq = 500)
 
 # Not surprisingly, the words hat appear more often are related
 # to the news topics
@@ -378,7 +378,6 @@ lasso.headlines <- glmnet(x=as.matrix(trainHeadlines[, -c(which(colnames(trainHe
 pred.headlines.train <- predict(lasso.headlines, 
                           as.matrix(trainHeadlines[, -c(which(colnames(trainHeadlines) == "SentimentHeadline"))]),
                           s = lasso.headlines$lambda.min)
-
 RMSE(pred.headlines.train, trainHeadlines$SentimentHeadline)
 
 # RMSE test = 0.1306057
@@ -388,16 +387,59 @@ pred.headlines.test <- predict(lasso.headlines,
 RMSE(pred.headlines.test, testHeadlines$SentimentHeadline)
 
 # Classification for Topic column
+# Remove outcomes
+sparseTitles$SentimentTitle <- NULL
+sparseHeadlines$SentimentHeadline <- NULL
+
+# Change names for dtms for both title and headline
+colnames(sparseTitles) <- paste0("T", colnames(sparseTitles))
+colnames(sparseHeadlines) <- paste0("H", colnames(sparseHeadlines))
+
 # Join Title and Headline sparseMatrix as features
+final_data <- cbind(news_data, sparseTitles, sparseHeadlines)
+final_data <- select(final_data, -c(Title, Headline, Source, PublishDate, WeekDay, SentimentTitle, SentimentHeadline))
 
-## KNN
+# Split data
+set.seed(882)
+train_index <- createDataPartition(final_data$Topic, times = 1, p = 0.6, list = FALSE)
+final_data.train <- final_data[train_index,]
+final_data.test <- final_data[-train_index,]
 
-## Naive Bayes
+## 10 Nearest Neighbor
+knn.topic <- knn3(Topic ~., data=final_data.train, k=10)
+
+# Since there is no higher cost involved when predicting false positives
+# or false negatives (we care about specifity and sensitivity equally), 
+# accuracy serves as a good measure of model performance
+# Accuracy on train set = 0.89
+confusionMatrix(predict(knn.topic, final_data.train, type="class"), 
+                final_data.train$Topic)
+
+# Test set accuracy = 0.8713657
+confusionMatrix(predict(knn.topic, final_data.test, type="class"), 
+                final_data.test$Topic)$overall["Accuracy"]
 
 ## Boosting
+# Use 90 trees and bootstrapped samples
+boost.topic <- boosting(Topic ~., data=final_data.train, boost=TRUE, mfinal=90)
+importanceplot(boost.topic)
 
+# Training Acuraccy = 0.9945668
+pred.boost.topic <- predict(boost.topic, final_data.train)
+confusionMatrix(factor(pred.boost.topic$class), final_data.train$Topic)$overall["Accuracy"]
 
+# Testing Accuracy = 0.9895934
+pred.boost.topic <- predict(boost.topic, final_data.test)
+confusionMatrix(factor(pred.boost.topic$class), final_data.test$Topic)$overall["Accuracy"]
 
+# In general, there a relatively high accuracy. Boosting significantly outperformed KNN
+
+# Future Work
+# Try other classification models like randomForest, CART, etc., as they might
+# defeat boosting.
+# Tune parameters for both KNN and boosting and futures models. It seems that
+# setting an arbitrary number of neighbors affected the KNN performance on
+# new data (overfitting).
 
 # REFERENCE
 # Nuno Moniz and Luís Torgo (2018), "Multi-Source Social Feedback of Online News Feeds",
