@@ -116,8 +116,8 @@ ggplot(km4_centers, aes(Activity, Value, group=Cluster, fill=Cluster)) +
     ggtitle("Cluster means")
 
 # REFERENCE
-# Renjith, Shini, A. Sreekumar, and M. Jathavedan. 2018. 
-# Evaluation of Partitioning Clustering Algorithms for Processing 
+# Renjith, Shini, A. Sreekumar, and M. Jathavedan. 2018.
+# Evaluation of Partitioning Clustering Algorithms for Processing
 # Social Media Data in Tourism Domainù. In 2018 IEEE Recent Advances in Intelligent Computational Systems (RAICS), 12731. IEEE.
 
 ## Hierarchical clustering
@@ -182,8 +182,8 @@ library(caret) # Split data into train and test sets
 library(lubridate) # Handle dates
 library(tidyverse) # Data manipulation, plotting, etc.
 library(glmnet) # Lasso regression
-library(ipred) # Bagging for regression trees
 library(adabag) # Boosting for classification trees
+library(ipred) # Bagging for regression trees
 
 # Variables description:
 # IDLink (numeric): Unique identifier of news items
@@ -278,8 +278,7 @@ sparseTitles <- as.data.frame(as.matrix(sparse.title))
 names(sparseTitles) <- make.names(names(sparseTitles))
 
 # Add dependent variable and other predictors
-sparseTitles <- sparseTitles %>%
-    mutate(SentimentTitle = news_data$SentimentTitle)
+sparseTitles$SentimentTitle <- news_data$SentimentTitle
 
 # Since this process will be repeated for the Headline column, two more helper functions
 # are created
@@ -385,7 +384,7 @@ testHeadlines <- sparseHeadlines[-train_index.headline,]
 lasso.headlines <- glmnet(x=as.matrix(trainHeadlines[, -c(which(colnames(trainHeadlines) == "SentimentHeadline"))]), y=trainHeadlines$SentimentHeadline, alpha = 1, numFolds=5)
 
 # RMSE train = 0.1297885
-pred.headlines.train <- predict(lasso.headlines, 
+pred.headlines.train <- predict(lasso.headlines,
                           as.matrix(trainHeadlines[, -c(which(colnames(trainHeadlines) == "SentimentHeadline"))]),
                           s = lasso.headlines$lambda.min)
 RMSE(pred.headlines.train, trainHeadlines$SentimentHeadline)
@@ -419,14 +418,14 @@ final_data.test <- final_data[-train_index,]
 knn.topic <- knn3(Topic ~., data=final_data.train, k=10)
 
 # Since there is no higher cost involved when predicting false positives
-# or false negatives (we care about specifity and sensitivity equally), 
+# or false negatives (we care about specifity and sensitivity equally),
 # accuracy serves as a good measure of model performance
 # Accuracy on train set = 0.89
-confusionMatrix(predict(knn.topic, final_data.train, type="class"), 
+confusionMatrix(predict(knn.topic, final_data.train, type="class"),
                 final_data.train$Topic)
 
 # Test set accuracy = 0.8713657
-confusionMatrix(predict(knn.topic, final_data.test, type="class"), 
+confusionMatrix(predict(knn.topic, final_data.test, type="class"),
                 final_data.test$Topic)$overall["Accuracy"]
 
 ## Boosting
